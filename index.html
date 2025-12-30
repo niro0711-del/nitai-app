@@ -20,138 +20,135 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700;800&display=swap');
-        body { font-family: 'Assistant', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Assistant', sans-serif; -webkit-tap-highlight-color: transparent; background-color: #f8fafc; }
         @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
         .animate-flash { animation: flash 0.5s ease-out; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-slate-50">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- הגדרות FIREBASE (ניר, הדבק כאן את מה שהעתקת מהמדור הורים) ---
-        const firebaseConfig = {
-  "apiKey": "AIzaSyCqyCcs2R2e7AegGjvFAwG98wlamtbHvZY",
-  "authDomain": "bard-frontend.firebaseapp.com",
-  "projectId": "bard-frontend",
-  "storageBucket": "bard-frontend.firebasestorage.app",
-  "messagingSenderId": "175205271074",
-  "appId": "1:175205271074:web:2b7bd4d34d33bf38e6ec7b"
-        };
+        // --- ניר: כאן תדביק את ההגדרות מהפרויקט החדש שפתחת ב-Firebase Console ---
+        // וודא שאתה מחליף את המילים בגרשיים בערכים האמיתיים שקיבלת בשלב 1 במדריך.
+     const firebaseConfig = {
+  apiKey: "AIzaSyAs-pBJCOuozUGwEghgDAo7TV7gmeQUt1k",
+  authDomain: "daily-routine-2edcb.firebaseapp.com",
+  projectId: "daily-routine-2edcb",
+  storageBucket: "daily-routine-2edcb.firebasestorage.app",
+  messagingSenderId: "917221147096",
+  appId: "1:917221147096:web:df1537d8d0e88e544372ad",
+  measurementId: "G-RPBE9M2FNG"
+};
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = "routine-helper-app";
+        const isConfigured = firebaseConfig.apiKey !== "YOUR_KEY_HERE" && !firebaseConfig.apiKey.includes("REDACTED");
 
-        // Gemini Config
-        const GEMINI_API_KEY = ""; // ניתן להוסיף מפתח אישי במידת הצורך
-        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-        const TTS_MODEL = "gemini-2.5-flash-preview-tts";
+        if (isConfigured) {
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        }
 
         const { useState, useEffect, useRef } = React;
 
-        // --- Helper Components & Icons (using SVG as fallback for GitHub stability) ---
+        // --- SVG Icons ---
         const Icon = ({ name, className = "w-6 h-6" }) => {
             const icons = {
                 trophy: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
-                settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
                 camera: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
-                help: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-                gift: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
-                sparkles: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1V11a2 2 0 0 1-2-2 2 2 0 0 1 2-2v-.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             };
             return icons[name] || null;
         };
 
         const MOODS = [
-            { id: 'happy', label: 'שמח', color: 'bg-green-50', border: 'border-green-200', emoji: '😊' },
-            { id: 'neutral', label: 'ככה ככה', color: 'bg-yellow-50', border: 'border-yellow-200', emoji: '😐' },
-            { id: 'sad', label: 'קצת קשה לי', color: 'bg-red-50', border: 'border-red-200', emoji: '😕' }
+            { id: 'happy', label: 'שמח', emoji: '😊', color: 'bg-green-50', border: 'border-green-200' },
+            { id: 'neutral', label: 'ככה ככה', emoji: '😐', color: 'bg-yellow-50', border: 'border-yellow-200' },
+            { id: 'sad', label: 'קצת קשה לי', emoji: '😕', color: 'bg-red-50', border: 'border-red-200' }
         ];
 
         const ROUTINES = {
-            morning: { id: 'morning', title: 'בוקר', tasks: [
+            morning: { title: 'בוקר', tasks: [
                 { id: 'm1', text: 'מתעוררים עם חיוך', icon: '😊' },
-                { id: 'm2', text: 'הולכים לשירותים', icon: '🚽' },
-                { id: 'm3', text: 'צחצוח שיניים', icon: '🪥', requiresPhoto: true, duration: 120 },
+                { id: 'm3', text: 'צחצוח שיניים', icon: '🪥', requiresPhoto: true },
                 { id: 'm5', text: 'לבישת בגדים', icon: '👕' },
-                { id: 'm7', text: 'סידור התיק', icon: '🎒', requiresPhoto: true },
+                { id: 'm7', text: 'סידור התיק', icon: '🎒', requiresPhoto: true }
             ]},
-            afternoon: { id: 'afternoon', title: 'צהריים', tasks: [
+            afternoon: { title: 'צהריים', tasks: [
                 { id: 'a1', text: 'שטיפת ידיים', icon: '🧼' },
                 { id: 'a2', text: 'ארוחת צהריים', icon: '🍽️' },
-                { id: 'a3', text: 'משחק חופשי', icon: '🧸', duration: 1800 },
-                { id: 'a4', text: 'הכנת שיעורים', icon: '📝', requiresPhoto: true },
+                { id: 'a4', text: 'הכנת שיעורים', icon: '📝', requiresPhoto: true }
             ]},
-            evening: { id: 'evening', title: 'ערב', tasks: [
+            evening: { title: 'ערב', tasks: [
                 { id: 'e2', text: 'מקלחת', icon: '🚿' },
                 { id: 'e3', text: 'לבישת פיג׳מה', icon: '😴' },
-                { id: 'e4', text: 'צחצוח שיניים', icon: '🪥', requiresPhoto: true, duration: 120 },
-                { id: 'e6', text: 'כיבוי אורות', icon: '🌙' },
+                { id: 'e4', text: 'צחצוח שיניים', icon: '🪥', requiresPhoto: true }
             ]}
         };
 
         function App() {
+            if (!isConfigured) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-8 bg-blue-50 text-center">
+                        <div className="max-w-md bg-white p-10 rounded-[40px] shadow-2xl border-4 border-blue-100">
+                            <h1 className="text-4xl font-black text-blue-600 mb-6">היי ניר! 👋</h1>
+                            <p className="text-xl text-slate-600 mb-8 leading-relaxed font-bold">השלד מוכן, עכשיו רק צריך לחבר את ה"חשמל".</p>
+                            <div className="text-right bg-slate-50 p-6 rounded-3xl border-2 border-slate-100 space-y-4">
+                                <p className="font-black text-slate-800 underline">מה השלב הבא?</p>
+                                <p className="text-sm">עבור על המדריך (deployment-guide.md) וקבל את המפתחות מ-Firebase Console.</p>
+                                <p className="text-sm">אחרי שתדביק אותם בקוד, האפליקציה תתעורר לחיים.</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             const [user, setUser] = useState(null);
-            const [dayData, setDayData] = useState({ completed: [], missed: [], photos: {}, totalPoints: 0, initialMood: null });
+            const [dayData, setDayData] = useState({ completed: [], totalPoints: 0, initialMood: null });
             const [activeRoutine, setActiveRoutine] = useState('morning');
-            const [isParentMode, setIsParentMode] = useState(false);
-            const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-            const [aiMessage, setAiMessage] = useState(null);
-            const [aiLoading, setAiLoading] = useState(false);
-            
+            const [showWelcome, setShowWelcome] = useState(false);
             const [isCameraOpen, setIsCameraOpen] = useState(false);
             const [capturedImage, setCapturedImage] = useState(null);
-            const [pendingTaskId, setPendingTaskId] = useState(null);
+            const [pendingTask, setPendingTask] = useState(null);
             
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
             const today = new Date().toISOString().split('T')[0];
 
             useEffect(() => {
+                const auth = firebase.auth();
+                const db = firebase.firestore();
                 auth.signInAnonymously().catch(e => console.error(e));
-                const unsub = auth.onAuthStateChanged(u => {
+                
+                const unsubAuth = auth.onAuthStateChanged(u => {
                     setUser(u);
                     if (u) {
-                        const dayDocRef = db.collection('artifacts').doc(appId).collection('users').doc(u.uid).collection('daily_stats').doc(today);
-                        dayDocRef.onSnapshot(doc => {
+                        const docRef = db.collection('stats').doc(`${u.uid}_${today}`);
+                        docRef.onSnapshot(doc => {
                             if (doc.exists) {
-                                const data = doc.data();
-                                setDayData(data);
-                                if (!data.initialMood) setShowWelcomeModal(true);
+                                setDayData(doc.data());
                             } else {
-                                dayDocRef.set({ completed: [], missed: [], photos: {}, totalPoints: 0, initialMood: null, date: today });
-                                setShowWelcomeModal(true);
+                                docRef.set({ completed: [], totalPoints: 0, initialMood: null, date: today });
+                                setShowWelcome(true);
                             }
                         });
                     }
                 });
-                return () => unsub();
+                return () => unsubAuth();
             }, [today]);
 
+            const setMood = async (mood) => {
+                const db = firebase.firestore();
+                await db.collection('stats').doc(`${user.uid}_${today}`).update({ initialMood: mood });
+                setShowWelcome(false);
+            };
+
             const completeTask = async (taskId, photo = null) => {
-                const u = auth.currentUser;
-                if (!u) return;
-                const dayDocRef = db.collection('artifacts').doc(appId).collection('users').doc(u.uid).collection('daily_stats').doc(today);
-                await dayDocRef.update({
+                const db = firebase.firestore();
+                await db.collection('stats').doc(`${user.uid}_${today}`).update({
                     completed: firebase.firestore.FieldValue.arrayUnion(taskId),
-                    totalPoints: firebase.firestore.FieldValue.increment(10),
-                    ...(photo && { [`photos.${taskId}`]: photo })
+                    totalPoints: firebase.firestore.FieldValue.increment(10)
                 });
                 setIsCameraOpen(false);
                 setCapturedImage(null);
-            };
-
-            const handleMood = async (moodId) => {
-                const u = auth.currentUser;
-                if (!u) return;
-                await db.collection('artifacts').doc(appId).collection('users').doc(u.uid).collection('daily_stats').doc(today).update({ initialMood: moodId });
-                setShowWelcomeModal(false);
-                setAiMessage(moodId === 'sad' ? "ניתאי, אתה גיבור! בוא ניתן חיבוק גדול לאמא או אבא." : "יופי ניתאי! בוא נתחיל יום נהדר.");
             };
 
             const startCamera = async () => {
@@ -159,104 +156,80 @@
                 setCapturedImage(null);
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                        videoRef.current.play();
-                    }
+                    if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
                 } catch (e) { alert("מצלמה לא זמינה"); setIsCameraOpen(false); }
             };
 
             const takePhoto = () => {
-                if (videoRef.current && canvasRef.current) {
-                    const ctx = canvasRef.current.getContext('2d');
-                    canvasRef.current.width = 400; canvasRef.current.height = 300;
-                    ctx.drawImage(videoRef.current, 0, 0, 400, 300);
-                    const data = canvasRef.current.toDataURL('image/jpeg', 0.6);
-                    setCapturedImage(data);
-                    setTimeout(() => completeTask(pendingTaskId, data), 800);
-                }
+                const ctx = canvasRef.current.getContext('2d');
+                canvasRef.current.width = 400; canvasRef.current.height = 300;
+                ctx.drawImage(videoRef.current, 0, 0, 400, 300);
+                const data = canvasRef.current.toDataURL('image/jpeg', 0.6);
+                setCapturedImage(data);
+                setTimeout(() => completeTask(pendingTask, data), 800);
             };
 
-            const currentTasks = ROUTINES[activeRoutine].tasks;
-
             return (
-                <div className="min-h-screen pb-20">
+                <div className="max-w-md mx-auto min-h-screen bg-white shadow-2xl relative pb-20">
                     <canvas ref={canvasRef} className="hidden" />
 
-                    {/* Welcome Modal */}
-                    {showWelcomeModal && (
+                    {showWelcome && (
                         <div className="fixed inset-0 bg-white z-[200] flex flex-col items-center justify-center p-8 text-center">
-                            <h2 className="text-3xl font-black mb-2">שלום ניתאי!</h2>
-                            <p className="text-xl font-bold text-slate-500 mb-12">איך אתה מרגיש היום?</p>
-                            <div className="space-y-4 w-full max-w-xs">
+                            <h2 className="text-4xl font-black mb-10 text-slate-800">שלום ניתאי!<br/><span className="text-2xl text-slate-400">איך אתה מרגיש היום?</span></h2>
+                            <div className="space-y-4 w-full">
                                 {MOODS.map(m => (
-                                    <button key={m.id} onClick={() => handleMood(m.id)} className={`w-full flex items-center justify-between p-6 rounded-[30px] border-2 ${m.color} ${m.border} shadow-sm`}>
-                                        <span className="text-lg font-black">{m.label}</span>
-                                        <span className="text-3xl">{m.emoji}</span>
+                                    <button key={m.id} onClick={() => setMood(m.id)} className={`w-full flex items-center justify-between p-7 rounded-[35px] border-2 shadow-sm active:scale-95 transition-all ${m.color} ${m.border}`}>
+                                        <span className="text-xl font-black text-slate-700">{m.label}</span>
+                                        <span className="text-4xl">{m.emoji}</span>
                                     </button>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* AI Message */}
-                    {aiMessage && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-6" onClick={() => setAiMessage(null)}>
-                            <div className="bg-white rounded-[40px] p-8 w-full max-w-sm shadow-2xl text-center">
-                                <p className="text-xl font-bold mb-6">{aiMessage}</p>
-                                <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black">הבנתי!</button>
-                            </div>
+                    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md p-5 border-b border-slate-100 flex justify-between items-center">
+                        <div className="bg-yellow-50 px-4 py-2 rounded-2xl border border-yellow-200 flex items-center gap-2">
+                            <Icon name="trophy" className="w-5 h-5 text-yellow-500" />
+                            <span className="font-black text-slate-700">{dayData.totalPoints || 0}</span>
                         </div>
-                    )}
-
-                    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md p-4 border-b border-slate-100 flex justify-between items-center">
-                        <div className="bg-yellow-50 px-3 py-1.5 rounded-2xl border border-yellow-200 flex items-center gap-2">
-                            <Icon name="trophy" className="w-4 h-4 text-yellow-500" />
-                            <span className="font-bold text-sm">{dayData.totalPoints}</span>
-                        </div>
-                        <h1 className="text-lg font-black">היום של ניתאי</h1>
-                        <button onDoubleClick={() => setIsParentMode(!isParentMode)} className="p-2 bg-slate-50 rounded-full text-slate-300">
-                            <Icon name="settings" className="w-5 h-5" />
-                        </button>
+                        <h1 className="text-2xl font-black text-slate-800 tracking-tight">היום של ניתאי</h1>
+                        <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-200"><Icon name="settings" /></div>
                     </header>
 
-                    <main className="p-4 max-w-md mx-auto space-y-4">
-                        {/* Routine Switcher */}
+                    <main className="p-5 space-y-6">
                         <div className="flex gap-2">
                             {Object.entries(ROUTINES).map(([key, r]) => (
-                                <button key={key} onClick={() => setActiveRoutine(key)} className={`flex-1 py-3 rounded-2xl border-2 transition-all font-bold text-xs ${activeRoutine === key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-100 text-slate-400'}`}>
+                                <button key={key} onClick={() => setActiveRoutine(key)} className={`flex-1 py-4 rounded-2xl border-2 transition-all font-black text-sm ${activeRoutine === key ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white text-slate-300 border-slate-100'}`}>
                                     {r.title}
                                 </button>
                             ))}
                         </div>
 
-                        {/* Task List */}
-                        <div className="space-y-3">
-                            {currentTasks.map(task => {
-                                const isDone = dayData.completed.includes(task.id);
+                        <div className="space-y-4">
+                            {ROUTINES[activeRoutine].tasks.map(t => {
+                                const done = dayData.completed.includes(t.id);
                                 return (
-                                    <div key={task.id} className={`p-4 rounded-3xl border-2 flex items-center gap-4 transition-all ${isDone ? 'bg-green-50 border-green-200 opacity-60' : 'bg-white border-white shadow-sm'}`} 
-                                         onClick={() => !isDone && (task.requiresPhoto ? (setPendingTaskId(task.id), startCamera()) : completeTask(task.id))}>
-                                        <div className="text-3xl relative">
-                                            {task.icon}
-                                            {task.requiresPhoto && !isDone && <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full p-0.5 border border-white text-white"><Icon name="camera" className="w-2.5 h-2.5" /></div>}
+                                    <div key={t.id} onClick={() => !done && (t.requiresPhoto ? (setPendingTask(t.id), startCamera()) : completeTask(t.id))} 
+                                         className={`p-6 rounded-[35px] border-2 flex items-center gap-5 transition-all ${done ? 'bg-green-50 border-green-100 opacity-60' : 'bg-white border-white shadow-md active:scale-95'}`}>
+                                        <div className="text-4xl relative">
+                                            {t.icon}
+                                            {t.requiresPhoto && !done && <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full p-1 border-2 border-white text-white"><Icon name="camera" className="w-3 h-3" /></div>}
                                         </div>
-                                        <div className="flex-1 font-bold text-lg">{task.text}</div>
-                                        {isDone ? <div className="text-green-500">✓</div> : <div className="w-6 h-6 border-2 border-slate-100 rounded-full" />}
+                                        <div className={`flex-1 font-black text-xl ${done ? 'text-slate-300 line-through' : 'text-slate-700'}`}>{t.text}</div>
+                                        {done ? <div className="text-green-500 font-black text-2xl">✓</div> : <div className="w-8 h-8 border-2 border-slate-100 rounded-full" />}
                                     </div>
                                 );
                             })}
                         </div>
                     </main>
 
-                    {/* Camera Modal */}
                     {isCameraOpen && (
                         <div className="fixed inset-0 bg-black z-[300] flex flex-col items-center justify-between p-6">
-                            <button onClick={() => {setIsCameraOpen(false); if(videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t=>t.stop());}} className="self-start text-white p-2">✕</button>
-                            <div className="relative w-full max-w-sm aspect-[3/4] rounded-[40px] overflow-hidden border-4 border-white/20">
+                            <button onClick={() => setIsCameraOpen(false)} className="self-start text-white p-4 text-3xl font-black">✕</button>
+                            <div className="relative w-full aspect-[3/4] rounded-[50px] overflow-hidden border-4 border-white/20">
                                 {capturedImage ? <img src={capturedImage} className="w-full h-full object-cover scale-x-[-1]" /> : <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />}
                             </div>
-                            {!capturedImage && <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-8 border-slate-300 flex items-center justify-center mb-8"><div className="w-12 h-12 bg-blue-600 rounded-full" /></button>}
+                            {!capturedImage && <button onClick={takePhoto} className="w-24 h-24 bg-white rounded-full border-8 border-slate-300 flex items-center justify-center mb-12 shadow-2xl active:scale-90 transition-transform"><div className="w-16 h-16 bg-blue-600 rounded-full" /></button>}
                         </div>
                     )}
                 </div>
